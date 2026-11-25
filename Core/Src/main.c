@@ -31,7 +31,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define BUFFER_SIZE 4
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -43,6 +43,7 @@
 CRC_HandleTypeDef hcrc;
 
 I2S_HandleTypeDef hi2s2;
+DMA_HandleTypeDef hdma_spi2_rx;
 
 SPI_HandleTypeDef hspi1;
 
@@ -52,6 +53,7 @@ UART_HandleTypeDef huart2;
 DMA_HandleTypeDef hdma_usart2_tx;
 
 /* USER CODE BEGIN PV */
+uint16_t sound_buffer[BUFFER_SIZE];
 uint8_t message[] = "DMA WORKS!!!";
 /* USER CODE END PV */
 
@@ -65,6 +67,20 @@ static void MX_TIM2_Init(void);
 static void MX_CRC_Init(void);
 static void MX_I2S2_Init(void);
 /* USER CODE BEGIN PFP */
+void Capture_Audio(){
+	memset(sound_buffer,0,sizeof(sound_buffer));
+	//clear buffer for sound data first
+	if (HAL_I2S_Receive_DMA(&hi2s2, (uint16_t *)sound_buffer, 2U) != HAL_OK)
+	  {
+	    printf("I2S DMA start failed\r\n");
+	    return;
+	  }	HAL_Delay(100);
+	HAL_I2S_DMAStop(&hi2s2);
+	printf("0x%08lX\r\n", (uint8_t)((sound_buffer[0]>>8)&0x00FFU));
+	printf("0x%08lX\r\n", (uint8_t)((sound_buffer[0])&0x00FFU));
+	printf("0x%08lX\r\n", (uint8_t)((sound_buffer[1]>>8)&0x00FFU));
+	HAL_Delay(500);
+}
 
 /* USER CODE END PFP */
 
@@ -110,14 +126,12 @@ int main(void)
   MX_CRC_Init();
   MX_I2S2_Init();
   /* USER CODE BEGIN 2 */
-	HAL_UART_Transmit_DMA(&huart2,message,sizeof(message)-1);
+	Capture_Audio();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	while (1) {
-		HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-		HAL_Delay(500);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -212,8 +226,8 @@ static void MX_I2S2_Init(void)
 
   /* USER CODE END I2S2_Init 1 */
   hi2s2.Instance = SPI2;
-  hi2s2.Init.Mode = I2S_MODE_MASTER_TX;
-  hi2s2.Init.Standard = I2S_STANDARD_MSB;
+  hi2s2.Init.Mode = I2S_MODE_MASTER_RX;
+  hi2s2.Init.Standard = I2S_STANDARD_PHILIPS;
   hi2s2.Init.DataFormat = I2S_DATAFORMAT_24B;
   hi2s2.Init.MCLKOutput = I2S_MCLKOUTPUT_DISABLE;
   hi2s2.Init.AudioFreq = I2S_AUDIOFREQ_11K;
@@ -356,6 +370,9 @@ static void MX_DMA_Init(void)
   __HAL_RCC_DMA1_CLK_ENABLE();
 
   /* DMA interrupt init */
+  /* DMA1_Stream3_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream3_IRQn);
   /* DMA1_Stream6_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Stream6_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream6_IRQn);
@@ -408,7 +425,7 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 int __io_putchar(char ch) {
-	HAL_UART_Transmit(&huart2, (uint8_t*)&ch, 1, HAL_MAX_DELAY);
+	HAL_UART_Transmit(&huart2, (uint8_t*)&ch,1,HAL_MAX_DELAY);
 	return ch;
 }
 
